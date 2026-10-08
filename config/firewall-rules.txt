@@ -1,0 +1,44 @@
+# =====================================================================
+#  BO LUAT FIREWALL - NHOM 06
+#
+#  Cu phap:  ACTION DIRECTION PROTO SRC_IP SRC_PORT DST_IP DST_PORT
+#    ACTION    : ALLOW | DENY
+#    DIRECTION : OUT (LAN -> Internet) | IN (Internet -> LAN) | *
+#    PROTO     : TCP | UDP | *
+#    IP        : dia chi cu the | CIDR (vi du 127.0.0.0/8) | *
+#    PORT      : so cu the | dai (8000-8100) | *
+#
+#  Luat duoc duyet TU TREN XUONG, KHOP DAU TIEN THANG (first-match-wins).
+#  Neu khong luat nao khop -> dung POLICY mac dinh o cuoi file.
+# =====================================================================
+
+# ---------- CHIEU RA (OUT): tu mang LAN di Internet ----------
+
+# Chan Telnet - giao thuc khong ma hoa, cam trong chinh sach cong ty
+DENY   OUT  TCP  *            *   *            23
+
+# Chan cac cong chia se file SMB/NetBIOS ra ngoai Internet
+DENY   OUT  TCP  *            *   *            137-139
+DENY   OUT  TCP  *            *   *            445
+
+# Chan mot may cu the trong LAN (vi du may bi nghi nhiem malware)
+DENY   OUT  *    127.0.0.99   *   *            *
+
+# Cho phep may trong dai LAN di toi External Server
+ALLOW  OUT  TCP  127.0.0.0/8  *   127.0.0.3    9000
+ALLOW  OUT  UDP  127.0.0.0/8  *   127.0.0.3    9001
+
+# Cho phep cac dich vu web thong dung
+ALLOW  OUT  TCP  127.0.0.0/8  *   *            80
+ALLOW  OUT  TCP  127.0.0.0/8  *   *            443
+
+# ---------- CHIEU VAO (IN): tu Internet vao LAN ----------
+
+# Chi mo duy nhat cong 8090 (Port Forwarding toi dich vu noi bo 127.0.0.20:7000)
+ALLOW  IN   TCP  *            *   *            8090
+
+# Moi ket noi vao khac deu bi chan (xem POLICY ben duoi)
+
+# ---------- CHINH SACH MAC DINH ----------
+POLICY OUT ALLOW
+POLICY IN  DENY
