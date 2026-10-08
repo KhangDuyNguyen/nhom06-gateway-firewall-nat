@@ -118,7 +118,7 @@ public class Firewall {
      * Ghi nhận một lần kết nối vào bị chặn và phát cảnh báo nếu phát hiện
      * dấu hiệu thăm dò cổng (nhiều cổng khác nhau trong cửa sổ thời gian ngắn).
      */
-    public void recordDeniedProbe(String srcIp, int targetPort) {
+    public synchronized void recordDeniedProbe(String srcIp, int targetPort) {
         long now = System.currentTimeMillis();
         Map<Integer, Long> ports = deniedProbes.computeIfAbsent(srcIp, k -> new ConcurrentHashMap<>());
         ports.put(targetPort, now);
