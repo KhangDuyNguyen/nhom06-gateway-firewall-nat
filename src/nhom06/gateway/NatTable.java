@@ -115,9 +115,9 @@ public class NatTable {
     public void release(NatEntry entry) {
         if (entry == null) return;
         entry.state(NatEntry.State.CLOSED);
-        indexOf(entry.protocol).remove(entry.publicPort, entry);
+        boolean removed = indexOf(entry.protocol).remove(entry.publicPort, entry);
         byKey.values().remove(entry);
-        totalReleased.incrementAndGet();
+        if (!removed) return; totalReleased.incrementAndGet();
         Log.nat("NAT-TABLE", String.format(
                 "THU HOI     %s %s -> %s  (gui %d B / nhan %d B, song %ds)",
                 entry.protocol, entry.internalSocket(), entry.publicSocket(),
