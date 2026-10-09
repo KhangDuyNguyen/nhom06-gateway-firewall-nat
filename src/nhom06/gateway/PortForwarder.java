@@ -137,6 +137,9 @@ public class PortForwarder implements Runnable {
         return t;
     }
 
+    public int publicPort()      { return publicPort; }
+    public String internalTarget() { return internalIp + ":" + internalPort; }
+
     public void stop() {
         running = false;
         try {

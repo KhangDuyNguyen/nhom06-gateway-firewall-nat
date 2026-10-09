@@ -30,6 +30,12 @@ public class Config {
         }
     }
 
+    /** Tao cau hinh trong bo nho (dung cho bo kiem thu tu dong). */
+    public Config(Properties source) {
+        this.path = "(in-memory)";
+        props.putAll(source);
+    }
+
     public String getPath() {
         return path;
     }

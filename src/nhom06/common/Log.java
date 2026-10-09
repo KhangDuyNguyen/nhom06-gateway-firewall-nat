@@ -34,12 +34,15 @@ public final class Log {
 
     private static PrintWriter file;
     private static boolean verbose = true;
+    private static boolean console = true;
+    private static long alertTotal = 0;
 
     private Log() {
     }
 
     public static synchronized void init(String filePath, boolean verboseMode) {
         verbose = verboseMode;
+        if (file != null) file.close();
         try {
             File f = new File(filePath);
             if (f.getParentFile() != null) f.getParentFile().mkdirs();
@@ -54,7 +57,7 @@ public final class Log {
         String line = String.format("%s [%-5s][%-12s] %s",
                 TS.format(new Date()), level, tag, msg);
 
-        if (verbose || level != Level.FWD) {
+        if (console && (verbose || level != Level.FWD)) {
             System.out.println(line);
         }
         if (file != null) file.println(line);
@@ -63,6 +66,7 @@ public final class Log {
         RING.addLast(line);
 
         if (level == Level.ALERT) {
+            alertTotal++;
             if (ALERTS.size() >= 100) ALERTS.removeFirst();
             ALERTS.addLast(line);
         }
@@ -83,6 +87,16 @@ public final class Log {
 
     public static synchronized List<String> alerts() {
         return new ArrayList<>(ALERTS);
+    }
+
+    /** Tong so canh bao da phat ra tu luc khoi dong. */
+    public static synchronized long alertTotal() {
+        return alertTotal;
+    }
+
+    /** Tat/bat in ra console (dung cho bo kiem thu tu dong). */
+    public static synchronized void setConsole(boolean c) {
+        console = c;
     }
 
     public static synchronized void setVerbose(boolean v) {

@@ -1,2 +1,18 @@
+# Thu muc bien dich va file sinh ra khi chay
 out/
+*.class
+sources.txt
 logs/*.log
+logs/*-rules.txt
+logs/*-report.txt
+
+# Cau hinh ca nhan cua IDE / he dieu hanh
+.idea/
+.vscode/
+*.iml
+.DS_Store
+Thumbs.db
+
+# File nhi phan lon
+*.jar
+*.zip

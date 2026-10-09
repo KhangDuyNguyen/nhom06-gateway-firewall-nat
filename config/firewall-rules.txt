@@ -26,7 +26,7 @@ DENY   OUT  *    127.0.0.99   *   *            *
 
 # Cho phep may trong dai LAN di toi External Server
 ALLOW  OUT  TCP  127.0.0.0/8  *   127.0.0.3    9000
-ALLOW  OUT  UDP  127.0.0.0/8  *   127.0.0.3    9001
+ALLOW  OUT  UDP  127.0.0.0/8  *   127.0.0.3    9001-9002
 
 # Cho phep cac dich vu web thong dung
 ALLOW  OUT  TCP  127.0.0.0/8  *   *            80

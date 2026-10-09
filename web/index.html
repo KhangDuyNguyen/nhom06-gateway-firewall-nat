@@ -1,0 +1,668 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gateway NAT/PAT - Nhóm 06</title>
+<style>
+  :root {
+    --bg: #edf0f3;
+    --panel: #ffffff;
+    --line: #d5dbe1;
+    --ink: #1b2733;
+    --muted: #5d6b78;
+    --lan: #2563a6;
+    --lan-soft: #e3edf8;
+    --wan: #6b46c1;
+    --wan-soft: #eee8fa;
+    --ok: #1f9a55;
+    --warn: #c98f00;
+    --bad: #cf3a30;
+    --off: #8c96a0;
+    --console: #17212b;
+    --radius: 6px;
+    --font: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, Roboto, sans-serif;
+    --mono: "Cascadia Mono", Consolas, "SF Mono", Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  html { font-size: 15px; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font-family: var(--font); line-height: 1.45;
+    font-variant-numeric: tabular-nums;
+  }
+  button, input, select { font: inherit; color: inherit; }
+  :focus-visible { outline: 3px solid var(--lan); outline-offset: 2px; }
+
+  /* ---------- header ---------- */
+  header {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 12px 24px;
+    padding: 16px 24px; background: var(--panel); border-bottom: 1px solid var(--line);
+  }
+  .title h1 { margin: 0; font-size: 1.45rem; font-weight: 650; letter-spacing: -0.01em; }
+  .title p { margin: 2px 0 0; color: var(--muted); font-size: .9rem; }
+  .status { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 20px; margin-left: auto; }
+  .stat-inline { display: flex; flex-direction: column; font-size: .8rem; color: var(--muted); }
+  .stat-inline strong { font-size: 1.05rem; color: var(--ink); font-weight: 600; }
+  .meter { width: 120px; height: 6px; background: #e4e8ec; border-radius: 3px; overflow: hidden; margin-top: 4px; }
+  .meter span { display: block; height: 100%; background: var(--wan); transition: width .3s; }
+  .live { display: inline-flex; align-items: center; gap: 6px; font-size: .85rem; color: var(--muted); }
+  .led { width: 9px; height: 9px; border-radius: 50%; background: var(--off); display: inline-block; flex: none; }
+  .live.on .led { background: var(--ok); box-shadow: 0 0 0 3px rgba(31,154,85,.18); }
+  .live.off .led { background: var(--bad); }
+
+  main { padding: 20px 24px 32px; display: grid; gap: 20px; max-width: 1500px; margin: 0 auto; }
+  section.panel { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); }
+  .panel > h2 { margin: 0; padding: 14px 18px 0; font-size: 1.05rem; font-weight: 650; }
+  .panel > .lead { margin: 4px 18px 0; color: var(--muted); font-size: .88rem; max-width: 75ch; }
+  .panel-body { padding: 14px 18px 18px; }
+
+  /* ---------- translation board (hero) ---------- */
+  .board-head, .xlat-row {
+    display: grid; grid-template-columns: minmax(170px, 1fr) minmax(300px, 1.35fr) minmax(190px, 1fr);
+  }
+  .board-head { margin: 14px 18px 0; font-size: .85rem; font-weight: 600; }
+  .board-head div { padding: 8px 14px; border-radius: var(--radius) var(--radius) 0 0; }
+  .board-head .z-lan { background: var(--lan-soft); color: var(--lan); }
+  .board-head .z-gw { background: #e6eaee; color: var(--ink); }
+  .board-head .z-net { background: var(--wan-soft); color: var(--wan); }
+  .board-head small { display: block; font-weight: 400; color: var(--muted); }
+  #board { list-style: none; margin: 0 18px 18px; padding: 0; }
+  .xlat-row { border-bottom: 1px solid var(--line); }
+  .xlat-row > div { padding: 12px 14px; min-width: 0; }
+  .xlat-row .lan { background: #f7fafd; }
+  .xlat-row .net { background: #faf8fe; }
+  .xlat-row .gw { position: relative; }
+  .xlat-row .gw::before, .xlat-row .gw::after {
+    content: ""; position: absolute; top: 26px; width: 14px; height: 2px; background: var(--off);
+  }
+  .xlat-row .gw::before { left: -7px; }
+  .xlat-row .gw::after { right: -7px; }
+  .addr { font-weight: 600; font-size: 1rem; word-break: break-all; }
+  .addr.lan-addr { color: var(--lan); }
+  .addr.pub-addr { color: var(--wan); font-size: 1.12rem; }
+  .meta { display: block; color: var(--muted); font-size: .82rem; margin-top: 2px; }
+  .gw-top { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+  .proto { font-size: .75rem; font-weight: 700; padding: 1px 7px; border-radius: 4px; background: #e6eaee; }
+  .badge { display: inline-flex; align-items: center; gap: 6px; font-size: .8rem; color: var(--muted); }
+  .s-ok .led { background: var(--ok); }
+  .s-warn .led { background: var(--warn); }
+  .s-bad .led { background: var(--bad); }
+  .s-off .led { background: var(--off); }
+  .timer { height: 4px; background: #e9edf0; border-radius: 2px; margin: 9px 0 5px; overflow: hidden; }
+  .timer span { display: block; height: 100%; background: var(--ok); transition: width .9s linear; }
+  .s-warn .timer span { background: var(--warn); }
+  .gw-meta { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: .8rem; color: var(--muted); }
+  .xlat-row.fresh .gw { background: #fff4c7; }
+  .empty { padding: 26px 18px; color: var(--muted); text-align: center; border-bottom: 1px solid var(--line); }
+  .perip { margin: -6px 18px 16px; font-size: .84rem; color: var(--muted); display: flex; flex-wrap: wrap; gap: 6px 16px; }
+  .perip b { color: var(--ink); font-weight: 600; }
+
+  /* ---------- lower grid ---------- */
+  .lower { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(320px, 1fr); gap: 20px; align-items: start; }
+  .stack { display: grid; gap: 20px; }
+
+  fieldset { border: 0; padding: 0; margin: 0 0 16px; }
+  legend { font-weight: 600; font-size: .9rem; margin-bottom: 8px; padding: 0; }
+  .hosts { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .hosts label {
+    display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border: 1px solid var(--line);
+    border-radius: 999px; cursor: pointer; background: #fff;
+  }
+  .hosts input[type=radio] { accent-color: var(--lan); margin: 0; }
+  .hosts label:has(input:checked) { border-color: var(--lan); background: var(--lan-soft); color: var(--lan); font-weight: 600; }
+  .hosts input[type=text] { width: 130px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 999px; }
+  .actions { display: flex; flex-wrap: wrap; gap: 8px; }
+  .btn {
+    padding: 8px 14px; border-radius: var(--radius); border: 1px solid var(--line); background: #fff;
+    cursor: pointer; font-weight: 500;
+  }
+  .btn:hover { border-color: #aab4be; background: #f6f8fa; }
+  .btn.primary { background: var(--lan); border-color: var(--lan); color: #fff; }
+  .btn.primary:hover { background: #1d5590; }
+  .btn.danger { color: var(--bad); }
+  .btn.small { padding: 4px 10px; font-size: .85rem; }
+  .btn:disabled { opacity: .5; cursor: default; }
+  .group-note { color: var(--muted); font-size: .84rem; margin: 6px 0 0; max-width: 70ch; }
+
+  .modes { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
+  .modes button {
+    text-align: left; padding: 8px 12px; border: 1px solid var(--line); border-radius: var(--radius);
+    background: #fff; cursor: pointer;
+  }
+  .modes button[aria-pressed=true] { border-color: var(--wan); background: var(--wan-soft); color: var(--wan); font-weight: 600; }
+  #modeDesc { margin-top: 8px; }
+
+  .sessions { display: grid; gap: 10px; margin-top: 4px; }
+  .session { border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 12px; }
+  .session.closed { opacity: .55; }
+  .session-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; }
+  .session-head .route { font-size: .88rem; }
+  .session-head .route .lan-addr { color: var(--lan); font-weight: 600; }
+  .session-head .route .pub-addr { color: var(--wan); font-weight: 600; }
+  .session-tools { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .session-tools input { flex: 1 1 160px; min-width: 120px; padding: 4px 8px; border: 1px solid var(--line); border-radius: var(--radius); }
+  .session-lines { margin: 8px 0 0; padding: 8px 10px; background: #f5f7f9; border-radius: 4px; font-family: var(--mono);
+    font-size: .78rem; max-height: 150px; overflow: auto; white-space: pre-wrap; word-break: break-word; }
+  .udp-list { list-style: none; padding: 0; margin: 4px 0 0; font-size: .85rem; }
+  .udp-list li { padding: 5px 0; border-bottom: 1px dashed var(--line); display: grid; grid-template-columns: 70px 1fr; gap: 8px; }
+  .udp-list .t { color: var(--muted); }
+  .udp-list .in { color: var(--wan); }
+  .udp-list .outgoing { color: var(--lan); }
+
+  /* ---------- right column ---------- */
+  .alerts { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+  .alerts li { border-left: 4px solid var(--bad); background: #fdf1f0; padding: 8px 10px; border-radius: 0 4px 4px 0; font-size: .86rem; }
+  .alerts li time { display: block; color: var(--muted); font-size: .78rem; }
+  .count { display: inline-block; min-width: 22px; text-align: center; padding: 0 7px; border-radius: 999px; background: #e6eaee; font-size: .8rem; margin-left: 6px; }
+  .count.hot { background: var(--bad); color: #fff; }
+  table { width: 100%; border-collapse: collapse; font-size: .84rem; }
+  th { text-align: left; font-weight: 600; color: var(--muted); padding: 6px 6px; border-bottom: 1px solid var(--line); }
+  td { padding: 6px 6px; border-bottom: 1px solid #edf0f2; vertical-align: top; word-break: break-all; }
+  td.deny { color: var(--bad); font-weight: 600; }
+  td.allow { color: var(--ok); font-weight: 600; }
+  td.hits { text-align: right; white-space: nowrap; }
+  tr.hot td { background: #fffbea; }
+  .table-wrap { overflow-x: auto; }
+  dl.stats { display: grid; grid-template-columns: 1fr auto; gap: 6px 12px; margin: 0; font-size: .9rem; }
+  dl.stats dt { color: var(--muted); }
+  dl.stats dd { margin: 0; font-weight: 600; text-align: right; }
+
+  /* ---------- log ---------- */
+  .log-tools { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; padding: 10px 18px 0; font-size: .88rem; }
+  .log-tools label { display: inline-flex; gap: 6px; align-items: center; cursor: pointer; }
+  #log {
+    margin: 12px 18px 18px; background: var(--console); color: #cfd8e1; border-radius: 4px; padding: 12px 14px;
+    font-family: var(--mono); font-size: .78rem; line-height: 1.5; height: 300px; overflow: auto; white-space: pre-wrap;
+    word-break: break-word;
+  }
+  #log .l-NAT { color: #8cc4ff; }
+  #log .l-FW { color: #ffd479; }
+  #log .l-ALERT { color: #ff8a80; font-weight: 700; }
+  #log .l-ERROR { color: #ff6b61; }
+  #log .l-FWD { color: #7a8794; }
+
+  #toast {
+    position: fixed; right: 20px; bottom: 20px; max-width: min(460px, calc(100vw - 40px)); padding: 12px 16px;
+    border-radius: var(--radius); background: var(--ink); color: #fff; font-size: .9rem;
+    box-shadow: 0 6px 24px rgba(20, 30, 40, .25); opacity: 0; transform: translateY(8px);
+    transition: opacity .2s, transform .2s; pointer-events: none;
+  }
+  #toast.show { opacity: 1; transform: none; }
+  #toast.err { background: var(--bad); }
+  .offline-note { display: none; margin: 0 24px; padding: 10px 14px; background: #fdf1f0; border: 1px solid #f2c7c3; border-radius: var(--radius); }
+  body.offline .offline-note { display: block; margin-top: 16px; }
+
+  @media (max-width: 1050px) {
+    .lower { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 760px) {
+    header, main { padding-left: 14px; padding-right: 14px; }
+    .board-head { display: none; }
+    .xlat-row { grid-template-columns: 1fr; }
+    .xlat-row .gw::before, .xlat-row .gw::after { display: none; }
+    .xlat-row > div::before { display: block; font-size: .75rem; color: var(--muted); margin-bottom: 2px; }
+    .xlat-row .lan::before { content: "Trong LAN"; }
+    .xlat-row .gw::before { content: "Gateway dịch thành"; position: static; width: auto; height: auto; background: none; display: block; }
+    .xlat-row .net::before { content: "Đích trên Internet"; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    * { animation: none !important; transition: none !important; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="title">
+    <h1>Gateway Firewall NAT/PAT</h1>
+    <p>Nhóm 06, lớp 23DTHA5. Trang tự cập nhật mỗi giây.</p>
+  </div>
+  <div class="status">
+    <div class="stat-inline">IP công cộng <strong id="hPublic">-</strong></div>
+    <div class="stat-inline">Cổng PAT đang dùng <strong id="hPat">-</strong><div class="meter"><span id="hPatBar" style="width:0"></span></div></div>
+    <div class="stat-inline">Kiểu NAT (UDP) <strong id="hMode">-</strong></div>
+    <span class="live" id="live"><span class="led"></span><span id="liveText">Đang kết nối</span></span>
+  </div>
+</header>
+<p class="offline-note" role="alert">Mất kết nối tới Gateway. Kiểm tra cửa sổ Gateway còn chạy, trang sẽ tự kết nối lại.</p>
+
+<main>
+  <section class="panel" aria-labelledby="boardTitle">
+    <h2 id="boardTitle">Bảng dịch địa chỉ</h2>
+    <p class="lead">Mỗi dòng là một ánh xạ trong bảng NAT. Địa chỉ riêng bên trái được Gateway thay bằng địa chỉ công cộng ở giữa, nên máy chủ bên phải chỉ nhìn thấy địa chỉ công cộng. Thanh màu cho biết còn bao lâu nữa ánh xạ bị thu hồi nếu không có dữ liệu.</p>
+    <div class="board-head" aria-hidden="true">
+      <div class="z-lan">Mạng LAN<small>địa chỉ riêng</small></div>
+      <div class="z-gw">Gateway<small id="gwSub">-</small></div>
+      <div class="z-net">Internet<small>đích và địa chỉ nó nhìn thấy</small></div>
+    </div>
+    <ul id="board" aria-live="polite"></ul>
+    <div class="perip" id="perIp"></div>
+  </section>
+
+  <div class="lower">
+    <div class="stack">
+      <section class="panel" aria-labelledby="ctlTitle">
+        <h2 id="ctlTitle">Điều khiển demo</h2>
+        <p class="lead">Các nút dưới đây đóng vai máy trong LAN hoặc máy bên ngoài, và đi qua đúng đường NAT/Firewall thật của Gateway.</p>
+        <div class="panel-body">
+          <fieldset>
+            <legend>Máy trong LAN thực hiện thao tác</legend>
+            <div class="hosts" id="hosts">
+              <label><input type="radio" name="host" value="127.0.0.11" checked> 127.0.0.11</label>
+              <label><input type="radio" name="host" value="127.0.0.12"> 127.0.0.12</label>
+              <label><input type="radio" name="host" value="127.0.0.13"> 127.0.0.13</label>
+              <input type="text" id="customHost" placeholder="IP khác, ví dụ 127.0.0.50" aria-label="Nhập IP nội bộ khác">
+            </div>
+          </fieldset>
+
+          <fieldset>
+            <legend>TCP</legend>
+            <div class="actions">
+              <button class="btn primary" data-act="open">Mở phiên TCP</button>
+              <button class="btn" data-act="multi">Mở 3 phiên cùng lúc</button>
+              <button class="btn" data-act="telnet">Thử kết nối Telnet (sẽ bị chặn)</button>
+              <button class="btn danger" data-act="closeall">Đóng tất cả phiên demo</button>
+            </div>
+            <p class="group-note">Mở nhiều phiên từ cùng một máy để thấy PAT cấp mỗi phiên một cổng công khai khác nhau.</p>
+          </fieldset>
+
+          <fieldset>
+            <legend>UDP và kiểu NAT</legend>
+            <div class="modes" id="modes" role="group" aria-label="Kiểu NAT"></div>
+            <p class="group-note" id="modeDesc"></p>
+            <div class="actions" style="margin-top:10px">
+              <button class="btn" data-act="udp1">Gửi UDP tới cổng <span class="udpA">9001</span></button>
+              <button class="btn" data-act="udp2">Gửi UDP tới cổng <span class="udpB">9002</span></button>
+              <button class="btn" data-act="peer">Nhờ bên thứ ba gửi gói vào</button>
+            </div>
+            <p class="group-note">Gửi tới hai cổng rồi xem bảng dịch: Symmetric cấp hai cổng công khai, các kiểu cone dùng chung một cổng. "Bên thứ ba" là hai máy chưa từng được liên lạc gửi gói vào, kiểu NAT quyết định gói nào lọt qua.</p>
+          </fieldset>
+
+          <fieldset>
+            <legend>Từ bên ngoài vào</legend>
+            <div class="actions">
+              <button class="btn" data-act="scan">Quét cổng Gateway</button>
+              <button class="btn" data-act="forward">Truy cập dịch vụ nội bộ (Port Forwarding)</button>
+            </div>
+          </fieldset>
+
+          <h3 style="font-size:.95rem;margin:18px 0 6px">Phiên TCP đang mở</h3>
+          <div class="sessions" id="sessions"></div>
+          <p class="group-note" id="noSessions">Chưa có phiên nào. Bấm "Mở phiên TCP" để bắt đầu.</p>
+
+          <h3 style="font-size:.95rem;margin:18px 0 6px">Gói UDP gần đây</h3>
+          <ul class="udp-list" id="udpList"></ul>
+          <p class="group-note" id="noUdp">Chưa gửi gói UDP nào.</p>
+        </div>
+      </section>
+    </div>
+
+    <div class="stack">
+      <section class="panel" aria-labelledby="alertTitle">
+        <h2 id="alertTitle">Cảnh báo an ninh <span class="count" id="alertCount">0</span></h2>
+        <div class="panel-body">
+          <ul class="alerts" id="alerts"></ul>
+          <p class="group-note" id="noAlerts">Chưa có cảnh báo. Bấm "Quét cổng Gateway" để thử phát hiện quét cổng.</p>
+        </div>
+      </section>
+
+      <section class="panel" aria-labelledby="ruleTitle">
+        <h2 id="ruleTitle">Luật firewall</h2>
+        <p class="lead">Duyệt từ trên xuống, luật khớp đầu tiên quyết định. Cột cuối đếm số lần mỗi luật đã khớp.</p>
+        <div class="panel-body">
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Dòng</th><th>Hành động</th><th>Chiều</th><th>Giao thức</th><th>Nguồn</th><th>Đích</th><th>Khớp</th></tr></thead>
+              <tbody id="rules"></tbody>
+            </table>
+          </div>
+          <div class="actions" style="margin-top:10px"><button class="btn small" data-act="reload">Nạp lại file luật</button></div>
+        </div>
+      </section>
+
+      <section class="panel" aria-labelledby="statTitle">
+        <h2 id="statTitle">Thống kê</h2>
+        <div class="panel-body"><dl class="stats" id="stats"></dl></div>
+      </section>
+    </div>
+  </div>
+
+  <section class="panel" aria-labelledby="logTitle">
+    <h2 id="logTitle">Nhật ký Gateway</h2>
+    <div class="log-tools">
+      <label><input type="checkbox" id="showFwd"> Hiện từng gói được chuyển tiếp</label>
+      <label><input type="checkbox" id="follow" checked> Tự cuộn xuống dòng mới</label>
+    </div>
+    <div id="log" tabindex="0" aria-label="Nhật ký Gateway"></div>
+  </section>
+</main>
+
+<div id="toast" role="status" aria-live="polite"></div>
+
+<script>
+(() => {
+  const $ = (s) => document.querySelector(s);
+  const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const fmtBytes = (n) => n < 1024 ? n + " B" : (n / 1024).toFixed(1) + " KB";
+  const fmtSecs = (ms) => {
+    const s = Math.max(0, Math.round(ms / 1000));
+    return s < 60 ? s + " giây" : Math.floor(s / 60) + " phút " + (s % 60) + " giây";
+  };
+
+  const STATE = {
+    ACTIVE: ["Đang hoạt động", "s-ok"],
+    SYN_SENT: ["Đang mở kết nối", "s-warn"],
+    ESTABLISHED: ["Đã kết nối", "s-ok"],
+    FIN_LAN: ["LAN đã gửi FIN, chờ phía kia", "s-warn"],
+    FIN_WAN: ["Internet đã gửi FIN, chờ phía kia", "s-warn"],
+    TIME_WAIT: ["Hai phía đã đóng", "s-warn"],
+    RESET: ["Bị ngắt (RST)", "s-bad"],
+    CLOSED: ["Đã đóng", "s-off"],
+  };
+
+  let state = null;
+  let known = null;              // khoá các ánh xạ đã thấy, để đánh dấu ánh xạ mới
+  const sessionEls = new Map();
+
+  // ------------------------------------------------------------ máy LAN đang chọn
+  function host() {
+    const custom = $("#customHost").value.trim();
+    if (custom) return custom;
+    const r = document.querySelector('input[name="host"]:checked');
+    return r ? r.value : "127.0.0.11";
+  }
+  $("#customHost").addEventListener("input", () => {
+    if ($("#customHost").value.trim()) document.querySelectorAll('input[name="host"]').forEach((r) => (r.checked = false));
+  });
+  document.querySelectorAll('input[name="host"]').forEach((r) =>
+    r.addEventListener("change", () => ($("#customHost").value = "")));
+
+  // ------------------------------------------------------------ gọi API
+  async function act(params, btn) {
+    if (btn) btn.disabled = true;
+    try {
+      const r = await fetch("/api/action", { method: "POST", body: new URLSearchParams(params) });
+      const j = await r.json();
+      toast(j.message, j.ok);
+      await poll();
+      return j;
+    } catch (e) {
+      toast("Không gửi được yêu cầu tới Gateway: " + e.message, false);
+    } finally {
+      if (btn) btn.disabled = false;
+    }
+  }
+
+  let toastTimer;
+  function toast(msg, ok) {
+    const t = $("#toast");
+    t.textContent = msg;
+    t.className = "show" + (ok ? "" : " err");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => (t.className = ok ? "" : "err"), 4500);
+  }
+
+  document.addEventListener("click", (ev) => {
+    const btn = ev.target.closest("[data-act]");
+    if (!btn || !state) return;
+    const g = state.gateway, ds = g.demoServer;
+    const a = btn.dataset.act;
+    const map = {
+      open: { type: "open", src: host(), dst: ds.ip, port: ds.tcp },
+      multi: { type: "multi", n: 3, src: host(), dst: ds.ip, port: ds.tcp },
+      telnet: { type: "open", src: host(), dst: ds.ip, port: 23 },
+      closeall: { type: "closeall" },
+      udp1: { type: "udp", src: host(), dst: ds.ip, port: ds.udp, msg: "xin chao" },
+      udp2: { type: "udp", src: host(), dst: ds.ip, port: ds.udp + 1, msg: "xin chao cong thu hai" },
+      peer: { type: "udp", src: host(), dst: ds.ip, port: ds.udp, msg: "peer" },
+      scan: { type: "scan" },
+      forward: { type: "forward", msg: "GET /trang-noi-bo" },
+      reload: { type: "reload" },
+      whoami: { type: "send", id: btn.dataset.id, msg: "whoami" },
+      half: { type: "half", id: btn.dataset.id },
+      close: { type: "close", id: btn.dataset.id },
+      mode: { type: "mode", value: btn.dataset.value },
+    };
+    if (a === "send") {
+      const input = btn.parentElement.querySelector("input");
+      const msg = input.value.trim();
+      if (!msg) { input.focus(); return; }
+      act({ type: "send", id: btn.dataset.id, msg }, btn).then(() => (input.value = ""));
+      return;
+    }
+    if (map[a]) act(map[a], btn);
+  });
+  document.addEventListener("keydown", (ev) => {
+    if (ev.key === "Enter" && ev.target.matches(".session-tools input")) {
+      ev.preventDefault();
+      ev.target.parentElement.querySelector('[data-act="send"]').click();
+    }
+  });
+
+  // ------------------------------------------------------------ hiển thị
+  function renderHeader(s) {
+    const g = s.gateway;
+    $("#hPublic").textContent = g.publicIp;
+    $("#hPat").textContent = s.stats.active + " / " + g.capacity;
+    $("#hPatBar").style.width = Math.min(100, (100 * s.stats.active) / g.capacity) + "%";
+    const mode = g.modes.find((m) => m.name === g.mode);
+    $("#hMode").textContent = mode ? mode.label : g.mode;
+    $("#gwSub").textContent = "LAN " + g.lanIp + " / WAN " + g.publicIp + ", cổng PAT " + g.portMin + "-" + g.portMax;
+    document.querySelectorAll(".udpA").forEach((e) => (e.textContent = g.demoServer.udp));
+    document.querySelectorAll(".udpB").forEach((e) => (e.textContent = g.demoServer.udp + 1));
+  }
+
+  function renderBoard(s) {
+    const board = $("#board");
+    const keys = new Set();
+    if (!s.nat.length) {
+      board.innerHTML = '<li class="empty">Bảng NAT đang trống. Chọn một máy LAN rồi bấm "Mở phiên TCP" để thấy địa chỉ được dịch.</li>';
+    } else {
+      board.innerHTML = s.nat.map((e) => {
+        const key = e.proto + "|" + e.public + "|" + e.internal + "|" + e.dest;
+        keys.add(key);
+        const fresh = known && e.age < 2500 ? " fresh" : "";
+        const [label, cls] = STATE[e.state] || [e.state, "s-off"];
+        let timer = "", left = "";
+        if (e.static) {
+          left = "<span>NAT tĩnh, không hết hạn</span>";
+        } else {
+          const remain = Math.max(0, e.limit - e.idle);
+          timer = '<div class="timer"><span style="width:' + Math.max(0, Math.min(100, (100 * remain) / e.limit)) + '%"></span></div>';
+          left = "<span>thu hồi sau " + fmtSecs(remain) + " nếu im lặng</span>";
+        }
+        const lanMeta = e.static ? "dịch vụ nội bộ" : "máy trong LAN";
+        const netMeta = e.static
+          ? "máy bên ngoài kết nối vào qua cổng " + e.publicPort
+          : "nhìn thấy nguồn là " + e.public;
+        const shared = e.peers > 1 ? ' <span class="meta">dùng chung cho ' + e.peers + " đích (" + esc(e.mode) + ")</span>" : "";
+        const modeTag = e.proto === "UDP" && !e.static ? '<span class="meta">' + esc(e.mode) + "</span>" : "";
+        return '<li class="xlat-row ' + cls + fresh + '">'
+          + '<div class="lan"><span class="addr lan-addr">' + esc(e.internal) + '</span><span class="meta">' + lanMeta + "</span></div>"
+          + '<div class="gw"><div class="gw-top"><span class="proto">' + esc(e.proto) + '</span>'
+          + '<span class="addr pub-addr">' + esc(e.public) + '</span>'
+          + '<span class="badge"><span class="led"></span>' + esc(label) + "</span></div>"
+          + timer + '<div class="gw-meta">' + left
+          + "<span>gửi " + fmtBytes(e.out) + "</span><span>nhận " + fmtBytes(e.in) + "</span></div>" + modeTag + "</div>"
+          + '<div class="net"><span class="addr">' + esc(e.dest) + "</span>" + shared
+          + '<span class="meta">' + esc(netMeta) + "</span></div></li>";
+      }).join("");
+    }
+    known = keys;
+    const per = Object.entries(s.perIp || {});
+    $("#perIp").innerHTML = per.length
+      ? "<span>Số phiên theo máy:</span>" + per.map(([ip, n]) => "<span><b>" + esc(ip) + "</b> " + n
+        + (s.gateway.maxPerIp > 0 ? "/" + s.gateway.maxPerIp : "") + "</span>").join("")
+      : "";
+  }
+
+  function renderModes(s) {
+    const g = s.gateway;
+    const box = $("#modes");
+    if (!box.children.length) {
+      box.innerHTML = g.modes.map((m) =>
+        '<button type="button" data-act="mode" data-value="' + esc(m.name) + '" aria-pressed="false">' + esc(m.label) + "</button>").join("");
+    }
+    box.querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.value === g.mode)));
+    const vi = {
+      SYMMETRIC: "Symmetric: mỗi đích một cổng công khai riêng, chỉ nhận gói từ đúng địa chỉ và cổng đã gửi tới. Chặt nhất, khó cho ứng dụng P2P.",
+      FULL_CONE: "Full-cone: mọi đích dùng chung một cổng công khai, nhận gói từ bất kỳ ai. Dễ kết nối nhất nhưng kém an toàn nhất.",
+      RESTRICTED_CONE: "Restricted-cone: dùng chung cổng công khai, chỉ nhận gói từ những IP mà máy LAN đã từng gửi tới.",
+      PORT_RESTRICTED_CONE: "Port-restricted-cone: dùng chung cổng công khai, chỉ nhận gói từ đúng cặp IP và cổng đã gửi tới.",
+    };
+    $("#modeDesc").textContent = (vi[g.mode] || "") + " Đổi kiểu chỉ áp dụng cho ánh xạ UDP tạo sau đó.";
+  }
+
+  function renderSessions(s) {
+    const box = $("#sessions");
+    const ids = new Set(s.demo.sessions.map((x) => x.id));
+    for (const [id, el] of sessionEls) if (!ids.has(id)) { el.remove(); sessionEls.delete(id); }
+    for (const x of s.demo.sessions) {
+      let el = sessionEls.get(x.id);
+      if (!el) {
+        el = document.createElement("div");
+        el.className = "session";
+        el.innerHTML = '<div class="session-head"><strong>Phiên ' + x.id + '</strong><span class="route">'
+          + '<span class="lan-addr">' + esc(x.src) + "</span> qua <span class=\"pub-addr\">" + esc(x.public)
+          + "</span> tới " + esc(x.dest) + '</span><span class="badge st"><span class="led"></span><span class="st-text"></span></span></div>'
+          + '<div class="session-tools">'
+          + '<button class="btn small" data-act="whoami" data-id="' + x.id + '">Hỏi server thấy ai</button>'
+          + '<input type="text" placeholder="Nội dung gửi" aria-label="Nội dung gửi trên phiên ' + x.id + '">'
+          + '<button class="btn small" data-act="send" data-id="' + x.id + '">Gửi</button>'
+          + '<button class="btn small" data-act="half" data-id="' + x.id + '">Đóng chiều gửi (FIN)</button>'
+          + '<button class="btn small danger" data-act="close" data-id="' + x.id + '">Đóng phiên</button></div>'
+          + '<pre class="session-lines"></pre>';
+        box.appendChild(el);
+        sessionEls.set(x.id, el);
+      }
+      const label = { OPEN: ["Đang mở", "s-ok"], HALF: ["Đã gửi FIN, vẫn nhận dữ liệu", "s-warn"], CLOSED: ["Đã đóng", "s-off"] }[x.status] || [x.status, "s-off"];
+      const st = el.querySelector(".st");
+      st.className = "badge st " + label[1];
+      el.querySelector(".st-text").textContent = label[0];
+      el.classList.toggle("closed", x.status === "CLOSED");
+      el.querySelectorAll(".session-tools button, .session-tools input").forEach((b) => {
+        const kind = b.dataset.act;
+        b.disabled = x.status === "CLOSED" || (x.status === "HALF" && kind !== "close");
+      });
+      const pre = el.querySelector(".session-lines");
+      const text = x.lines.join("\n");
+      if (pre.textContent !== text) {
+        const atBottom = pre.scrollHeight - pre.scrollTop - pre.clientHeight < 20;
+        pre.textContent = text;
+        if (atBottom) pre.scrollTop = pre.scrollHeight;
+      }
+    }
+    $("#noSessions").hidden = s.demo.sessions.length > 0;
+  }
+
+  function renderUdp(s) {
+    const list = s.demo.udp.slice().reverse().slice(0, 12);
+    $("#udpList").innerHTML = list.map((u) => "<li><span class=\"t\">" + esc(u.time) + "</span><span class=\""
+      + (u.out ? "outgoing" : "in") + "\">" + (u.out
+        ? esc(u.host) + " gửi tới " + esc(u.peer) + ": " + esc(u.text)
+        : esc(u.host) + " nhận từ " + esc(u.peer) + ": " + esc(u.text)) + "</span></li>").join("");
+    $("#noUdp").hidden = list.length > 0;
+  }
+
+  function renderAlerts(s) {
+    const items = s.alerts.slice().reverse();
+    $("#alerts").innerHTML = items.map((a) => {
+      const time = a.slice(0, 12);
+      const msg = a.replace(/^.*\*\*\* CANH BAO \*\*\*\s*/, "");
+      return "<li><time>" + esc(time) + "</time>" + esc(msg) + "</li>";
+    }).join("");
+    $("#noAlerts").hidden = items.length > 0;
+    const c = $("#alertCount");
+    c.textContent = s.stats.alerts;
+    c.classList.toggle("hot", s.stats.alerts > 0);
+  }
+
+  let lastHits = {};
+  function renderRules(s) {
+    const rows = s.rules.map((r) => {
+      const hot = lastHits[r.line] !== undefined && r.hits > lastHits[r.line] ? ' class="hot"' : "";
+      return "<tr" + hot + "><td>" + r.line + '</td><td class="' + (r.action === "DENY" ? "deny" : "allow") + '">'
+        + (r.action === "DENY" ? "Chặn" : "Cho phép") + "</td><td>" + (r.dir === "IN" ? "Vào" : r.dir === "OUT" ? "Ra" : "Cả hai")
+        + "</td><td>" + (r.proto === "ANY" ? "Mọi" : esc(r.proto)) + "</td><td>" + esc(r.src) + "</td><td>" + esc(r.dst)
+        + '</td><td class="hits">' + r.hits + "</td></tr>";
+    });
+    const d = s.defaults;
+    rows.push('<tr><td>-</td><td colspan="5">Mặc định khi không luật nào khớp: ra <b>' + (d.out === "ALLOW" ? "cho phép" : "chặn")
+      + "</b>, vào <b>" + (d.in === "ALLOW" ? "cho phép" : "chặn") + '</b></td><td class="hits">' + (d.outHits + d.inHits) + "</td></tr>");
+    $("#rules").innerHTML = rows.join("");
+    lastHits = Object.fromEntries(s.rules.map((r) => [r.line, r.hits]));
+  }
+
+  function renderStats(s) {
+    const st = s.stats, g = s.gateway;
+    const rows = [
+      ["Ánh xạ đang mở", st.active + " / " + g.capacity],
+      ["Tổng đã cấp phát", st.allocated],
+      ["Tổng đã thu hồi", st.released],
+      ["Đỉnh đồng thời", st.peak],
+      ["Từ chối do hết cổng", st.rejected],
+      ["Từ chối do vượt " + g.maxPerIp + " phiên/máy", st.limitRejected],
+      ["Firewall cho phép", st.fwAllowed],
+      ["Firewall chặn", st.fwDenied],
+      ["Timeout TCP / đang đóng / UDP", fmtSecs(g.tcpTimeout) + " / " + fmtSecs(g.transTimeout) + " / " + fmtSecs(g.udpTimeout)],
+      ["Thời gian chạy", fmtSecs(g.uptime)],
+    ];
+    $("#stats").innerHTML = rows.map(([k, v]) => "<dt>" + esc(k) + "</dt><dd>" + esc(v) + "</dd>").join("");
+  }
+
+  function renderLog(s) {
+    const showFwd = $("#showFwd").checked;
+    const box = $("#log");
+    const lines = s.log.filter((l) => showFwd || !/\[FWD\s*\]/.test(l));
+    const html = lines.map((l) => {
+      const m = l.match(/\[(INFO|NAT|FWD|FW|ALERT|ERROR)\s*\]/);
+      return '<div class="l-' + (m ? m[1] : "INFO") + '">' + esc(l) + "</div>";
+    }).join("");
+    if (box.dataset.last !== html) {
+      box.innerHTML = html;
+      box.dataset.last = html;
+      if ($("#follow").checked) box.scrollTop = box.scrollHeight;
+    }
+  }
+  $("#showFwd").addEventListener("change", () => state && renderLog(state));
+
+  function render() {
+    renderHeader(state);
+    renderBoard(state);
+    renderModes(state);
+    renderSessions(state);
+    renderUdp(state);
+    renderAlerts(state);
+    renderRules(state);
+    renderStats(state);
+    renderLog(state);
+  }
+
+  function setOnline(on) {
+    $("#live").className = "live " + (on ? "on" : "off");
+    $("#liveText").textContent = on ? "Đang nhận dữ liệu" : "Mất kết nối";
+    document.body.classList.toggle("offline", !on);
+  }
+
+  let busy = false;
+  async function poll() {
+    if (busy) return;
+    busy = true;
+    try {
+      const r = await fetch("/api/state", { cache: "no-store" });
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      state = await r.json();
+      render();
+      setOnline(true);
+    } catch (e) {
+      setOnline(false);
+    } finally {
+      busy = false;
+    }
+  }
+  poll();
+  setInterval(poll, 1000);
+})();
+</script>
+</body>
+</html>

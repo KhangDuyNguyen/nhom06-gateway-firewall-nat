@@ -2,6 +2,8 @@ package nhom06.gateway;
 
 import nhom06.common.Protocol;
 
+import java.util.concurrent.atomic.AtomicLong;
+
 /**
  * Một luật lọc gói tin.
  *
@@ -30,6 +32,8 @@ public class FirewallRule {
     public final String dstPortSpec;
     public final int lineNumber;
     public final String raw;
+    /** So lan luat nay da khop (de biet luat nao dang thuc su hoat dong). */
+    private final AtomicLong hits = new AtomicLong();
 
     public FirewallRule(Action action, Direction direction, Protocol protocol,
                         String srcIpSpec, String srcPortSpec,
@@ -68,6 +72,14 @@ public class FirewallRule {
             System.out.println("[FIREWALL] Bo qua dong " + lineNumber + " (sai cu phap): " + line);
             return null;
         }
+    }
+
+    public long hits() {
+        return hits.get();
+    }
+
+    void hit() {
+        hits.incrementAndGet();
     }
 
     public boolean matches(Direction dir, Protocol proto,
@@ -123,8 +135,8 @@ public class FirewallRule {
 
     @Override
     public String toString() {
-        return String.format("#%-3d %-5s %-3s %-4s src=%s:%s dst=%s:%s",
+        return String.format("#%-3d %-5s %-3s %-4s src=%s:%s dst=%s:%s  [khop %d lan]",
                 lineNumber, action, direction, protocol,
-                srcIpSpec, srcPortSpec, dstIpSpec, dstPortSpec);
+                srcIpSpec, srcPortSpec, dstIpSpec, dstPortSpec, hits());
     }
 }
