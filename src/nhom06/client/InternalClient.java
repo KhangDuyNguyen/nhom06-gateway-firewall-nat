@@ -89,6 +89,9 @@ public class InternalClient {
                     case "close":
                         close(Integer.parseInt(t[1]));
                         break;
+                    case "half":
+                        half(Integer.parseInt(t[1]));
+                        break;
                     case "help":
                         help();
                         break;
@@ -172,6 +175,17 @@ public class InternalClient {
         s.out.flush();
     }
 
+    /** Dong MOT chieu (gui FIN) nhung van nhan du lieu - minh hoa TCP half-close. */
+    private void half(int id) throws IOException {
+        Session s = sessions.get(id);
+        if (s == null) {
+            System.out.println("[LOI] Khong co phien #" + id);
+            return;
+        }
+        s.socket.shutdownOutput();
+        System.out.println("[PHIEN #" + id + "] Da gui FIN (half-close): khong gui duoc nua nhung van nhan du lieu.");
+    }
+
     private void close(int id) {
         Session s = sessions.remove(id);
         if (s != null) {
@@ -249,6 +263,7 @@ public class InternalClient {
                   send <idPhien> <noi dung>         Gui du lieu tren phien da mo
                   udp <ipDich> <congDich> <noiDung> Gui mot goi UDP ra ngoai
                   list                              Liet ke cac phien dang mo
+                  half <idPhien>                    Dong mot chieu (gui FIN), van nhan du lieu
                   close <idPhien>                   Dong mot phien
                   quit                              Thoat
                 """);

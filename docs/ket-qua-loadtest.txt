@@ -1,0 +1,19 @@
+NHOM 06 - KET QUA KIEM THU TAI (08/10/2026 18:24:10)
+Che do: moi truong rieng
+Java 21.0.12.1, 1 CPU, Linux
+
+PHA 1 - THONG LUONG (50 client dong thoi, moi client 20 thong diep)
+  Phien mo thanh cong   : 50/50
+  Thong diep dung       : 1000/1000 (sai noi dung: 0)
+  Tong thoi gian        : 0.64 s
+  Thong luong           : 1573 thong diep/giay
+  Do tre khu hoi (RTT)  : min 0.25 ms | TB 14.45 ms | p95 48.43 ms | max 202.20 ms
+  Thoi gian mo phien TB : 234.20 ms
+
+PHA 2 - CAN DAI CONG PAT (120 yeu cau dong thoi, dai PAT 100 cong)
+  Duoc cap cong         : 100
+  Tu choi 'Het cong NAT': 20
+  Loi khac              : 0
+  Thoi gian xu ly       : 0.30 s
+  Bang NAT luc day      : 100/100 anh xa
+  => DUNG: cap du 100 cong, tu choi co kiem soat phan du.

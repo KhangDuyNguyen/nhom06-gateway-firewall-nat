@@ -45,6 +45,8 @@ public class Firewall {
 
     private final AtomicLong allowedCount = new AtomicLong();
     private final AtomicLong deniedCount = new AtomicLong();
+    private final AtomicLong defaultInHits = new AtomicLong();
+    private final AtomicLong defaultOutHits = new AtomicLong();
 
     // --- Phát hiện quét cổng ---
     private final int scanThreshold;
@@ -98,12 +100,15 @@ public class Firewall {
                           String srcIp, int srcPort, String dstIp, int dstPort) {
         for (FirewallRule r : rules) {
             if (r.matches(dir, proto, srcIp, srcPort, dstIp, dstPort)) {
+                r.hit();
                 boolean allow = (r.action == FirewallRule.Action.ALLOW);
                 count(allow);
                 return new Decision(allow, "luat #" + r.lineNumber + " [" + r.raw + "]");
             }
         }
         FirewallRule.Action def = (dir == FirewallRule.Direction.IN) ? defaultIn : defaultOut;
+        if (dir == FirewallRule.Direction.IN) defaultInHits.incrementAndGet();
+        else defaultOutHits.incrementAndGet();
         boolean allow = (def == FirewallRule.Action.ALLOW);
         count(allow);
         return new Decision(allow, "chinh sach mac dinh " + dir + "=" + def);
@@ -136,6 +141,11 @@ public class Firewall {
     }
 
     public List<FirewallRule> rules()  { return new ArrayList<>(rules); }
+    public FirewallRule.Action defaultIn()  { return defaultIn; }
+    public FirewallRule.Action defaultOut() { return defaultOut; }
+    public long defaultInHits()        { return defaultInHits.get(); }
+    public long defaultOutHits()       { return defaultOutHits.get(); }
+    public String rulesFile()          { return rulesFile; }
     public long allowedCount()         { return allowedCount.get(); }
     public long deniedCount()          { return deniedCount.get(); }
     public String defaults()           { return "OUT=" + defaultOut + ", IN=" + defaultIn; }

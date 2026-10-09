@@ -1,0 +1,40 @@
+NHOM 06 - KET QUA TU KIEM THU (08/10/2026 18:24:09)
+--------------------------------------------------------------------------------
+ID   KICH BAN                                                KQ          TG
+--------------------------------------------------------------------------------
+T01  NAT che giau IP noi bo (TCP)                            PASS     56 ms
+     127.0.0.11 -> server chi thay 127.0.0.2:41000
+T02  PAT: 3 phien cung IP -> 3 cong cong khai                PASS     28 ms
+     Cong cong khai: [127.0.0.2:41002, 127.0.0.2:41001, 127.0.0.2:41003]
+T03  Firewall chan chieu ra (Telnet cong 23)                 PASS      4 ms
+     403 DENY Bi firewall chan: luat #1 [DENY  OUT TCP *           * *         23]
+T04  Da luong: 8 phien dong thoi, du lieu khong lan nhau     PASS    121 ms
+     8 phien x 20 thong diep, tat ca dung nguoi nhan
+T05  UDP PAT co ban                                          PASS   1521 ms
+     Server UDP thay 127.0.0.2:41002
+T06  Symmetric: moi dich mot anh xa rieng                    PASS   2410 ms
+     Dich :19001 -> 127.0.0.2:41003, dich :19002 -> 127.0.0.2:41004
+T07  Symmetric: chan goi tu ben thu ba                       PASS   1202 ms
+     Chi nhan echo; goi tu 127.0.0.3:19002 va 127.0.0.4 bi chan
+T08  Full-cone: dung chung anh xa + nhan tu moi nguon        PASS   3613 ms
+     Hai dich chung 127.0.0.2:41006; nhan duoc goi tu ben thu ba (ca khac IP)
+T09  Restricted-cone: chi nhan tu IP da lien lac             PASS   1212 ms
+     Cung IP (khac cong): qua; khac IP: bi chan
+T10  Port-restricted-cone: chung anh xa, loc dung (IP,cong)  PASS   2408 ms
+     Chung anh xa 127.0.0.2:41009; moi goi ben thu ba bi chan
+T11  Port Forwarding (NAT tinh) vao dich vu LAN              PASS     19 ms
+     127.0.0.2:18090 -> 127.0.0.20:17000 OK
+T12  Canh bao quet cong (3 cong song song -> dung 1 canh bao) PASS    617 ms
+     Phat dung 1 canh bao QUET CONG
+T13  Gioi han 6 phien moi IP noi bo                          PASS     25 ms
+     Phien thu 7: 503 BUSY Vuot gioi han 6 phien cho IP 127.0.0.41
+T14  Can dai cong PAT (10 cong) -> tu choi                   PASS     23 ms
+     Phien thu 11: 503 BUSY Het cong NAT (dai 41000-41009 da day)
+T15  TCP half-close: gui FIN van nhan duoc du lieu           PASS    211 ms
+     FIN tu LAN -> van nhan duoc dong cuoi -> FIN tu server
+T16  NAT timeout: anh xa UDP tu thu hoi                      PASS   4202 ms
+     Anh xa bien mat sau ~2.5 giay im lang
+T17  Thong ke nhat quan + dem luot khop luat                 PASS     26 ms
+     Cap phat 32 = thu hoi 32 + dang mo 0; luat Telnet khop 1 lan
+--------------------------------------------------------------------------------
+TONG: 17/17 PASS, 0 FAIL

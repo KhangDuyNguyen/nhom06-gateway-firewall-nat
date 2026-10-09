@@ -11,8 +11,8 @@ import java.net.Socket;
 import java.nio.charset.StandardCharsets;
 import java.text.SimpleDateFormat;
 import java.util.Date;
-import java.util.concurrent.Executors;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 /**
  * INTERNAL SERVICE - mot dich vu nam BEN TRONG mang LAN (vi du web server noi bo).
@@ -26,6 +26,7 @@ import java.util.concurrent.ExecutorService;
 public class InternalService {
 
     private static final SimpleDateFormat TS = new SimpleDateFormat("HH:mm:ss");
+    private static volatile boolean quiet = false;
 
     public static void main(String[] args) throws Exception {
         String ip = (args.length > 0) ? args[0] : "127.0.0.20";
@@ -38,21 +39,38 @@ public class InternalService {
         System.out.printf("  Lang nghe tai %s:%d (chi truy cap duoc qua Port Forwarding)%n", ip, port);
         System.out.println("--------------------------------------------------------------");
 
-        ExecutorService pool = Executors.newCachedThreadPool();
+        start(ip, port, false);
+        Thread.currentThread().join();
+    }
+
+    /** Khởi động dịch vụ ở luồng nền (dùng chung cho main và bộ kiểm thử). */
+    public static void start(String ip, int port, boolean quietMode) throws IOException {
+        quiet = quietMode;
+        ExecutorService pool = Executors.newCachedThreadPool(r -> {
+            Thread t = new Thread(r);
+            t.setDaemon(true);
+            return t;
+        });
         ServerSocket server = new ServerSocket();
         server.setReuseAddress(true);
         server.bind(new InetSocketAddress(ip, port), 50);
-
-        while (true) {
-            Socket s = server.accept();
-            pool.execute(() -> handle(s));
-        }
+        Thread acceptor = new Thread(() -> {
+            while (true) {
+                try {
+                    Socket s = server.accept();
+                    pool.execute(() -> handle(s));
+                } catch (IOException e) {
+                    return;
+                }
+            }
+        }, "internal-service-accept");
+        acceptor.setDaemon(true);
+        acceptor.start();
     }
 
     private static void handle(Socket s) {
         String src = s.getInetAddress().getHostAddress() + ":" + s.getPort();
-        System.out.println(TS.format(new Date()) + " [LAN-SERVICE] Ket noi tu " + src
-                + " (di qua Gateway nen nguon la IP noi bo cua Gateway)");
+        log("[LAN-SERVICE] Ket noi tu " + src + " (di qua Gateway)");
         try (Socket sock = s;
              BufferedReader in = new BufferedReader(
                      new InputStreamReader(sock.getInputStream(), StandardCharsets.UTF_8));
@@ -62,7 +80,7 @@ public class InternalService {
             out.println("[LAN-SERVICE] Ban da vao duoc dich vu noi bo qua Port Forwarding!");
             String line;
             while ((line = in.readLine()) != null) {
-                System.out.println(TS.format(new Date()) + " [LAN-SERVICE] nhan: " + line);
+                log("[LAN-SERVICE] nhan: " + line);
                 if (line.trim().equalsIgnoreCase("bye")) {
                     out.println("[LAN-SERVICE] Tam biet.");
                     break;
@@ -71,5 +89,9 @@ public class InternalService {
             }
         } catch (IOException ignored) {
         }
+    }
+
+    private static void log(String msg) {
+        if (!quiet) System.out.println(TS.format(new Date()) + " " + msg);
     }
 }
