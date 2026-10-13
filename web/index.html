@@ -300,6 +300,21 @@
             </div>
           </fieldset>
 
+          <fieldset>
+            <legend>Điều tiết băng thông (QoS theo IP)</legend>
+            <div style="display:flex; flex-wrap:wrap; align-items:center; gap:8px;">
+              <select id="qosSpeed" style="padding:6px 10px; border:1px solid var(--line); border-radius:var(--radius); font-size:0.83rem; background:#fff;">
+                <option value="0">Không giới hạn</option>
+                <option value="10">Giới hạn 10 KB/s</option>
+                <option value="30">Giới hạn 30 KB/s</option>
+                <option value="100">Giới hạn 100 KB/s</option>
+              </select>
+              <button class="btn small" data-act="set_qos">Áp dụng cho máy đang chọn</button>
+              <span id="qosStatus" style="font-size:0.82rem; color:var(--muted); font-weight:600;"></span>
+            </div>
+            <p class="group-note">Điều khiển tốc độ truyền tải TCP tối đa cho máy LAN đang chọn để chống nghẽn mạng.</p>
+          </fieldset>
+
           <h3 style="font-size:.95rem;margin:18px 0 6px">Phiên TCP đang mở</h3>
           <div class="sessions" id="sessions"></div>
           <p class="group-note" id="noSessions">Chưa có phiên nào. Bấm "Mở phiên TCP" để bắt đầu.</p>
@@ -317,6 +332,10 @@
         <div class="panel-body">
           <ul class="alerts" id="alerts"></ul>
           <p class="group-note" id="noAlerts">Chưa có cảnh báo. Bấm "Quét cổng Gateway" để thử phát hiện quét cổng.</p>
+          <div id="bannedBox" style="margin-top:10px; padding-top:8px; border-top:1px dashed var(--line);" hidden>
+            <div style="font-size:0.83rem; font-weight:600; color:var(--bad); margin-bottom:6px;">Danh sách IP bị khóa (Auto-Ban):</div>
+            <ul id="bannedList" style="list-style:none; padding:0; margin:0; font-size:0.82rem; display:grid; gap:4px;"></ul>
+          </div>
         </div>
       </section>
 
@@ -391,6 +410,26 @@
       </section>
     </div>
   </div>
+
+  <section class="panel" aria-labelledby="histTitle">
+    <div style="display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; padding:14px 18px 0; gap:10px;">
+      <h2 id="histTitle" style="margin:0; padding:0;">Lịch sử phiên đã kết thúc (Session History)</h2>
+      <div class="actions">
+        <button class="btn small" data-act="export_csv">📥 Xuất báo cáo CSV</button>
+        <button class="btn small" data-act="export_json">📥 Xuất báo cáo JSON</button>
+      </div>
+    </div>
+    <p class="lead">Ghi nhận các phiên NAT/PAT đã đóng hoặc thu hồi do timeout để đối soát và kiểm toán lưu lượng.</p>
+    <div class="panel-body">
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Thời gian</th><th>Giao thức</th><th>Nguồn LAN</th><th>Cổng công khai</th><th>Đích</th><th>Lưu lượng</th><th>Thời lượng</th><th>Trạng thái</th></tr></thead>
+          <tbody id="histBody"></tbody>
+        </table>
+      </div>
+      <p class="group-note" id="noHist">Chưa có phiên nào kết thúc.</p>
+    </div>
+  </section>
 
   <section class="panel" aria-labelledby="logTitle">
     <h2 id="logTitle">Nhật ký Gateway</h2>
@@ -488,7 +527,33 @@
       close: { type: "close", id: btn.dataset.id },
       mode: { type: "mode", value: btn.dataset.value },
       del_rule: { type: "delete_rule", line: btn.dataset.line },
+      set_qos: { type: "set_qos", ip: host(), limit: $("#qosSpeed").value },
+      unban_ip: { type: "unban_ip", ip: btn.dataset.ip },
     };
+    if (a === "export_csv") {
+      if (!state || !state.history || !state.history.length) {
+        toast("Chưa có dữ liệu lịch sử phiên để xuất", false);
+        return;
+      }
+      let csv = "Thoi_gian,Giao_thuc,Nguon_LAN,Cong_cong_khai,Dich,Gui_Byte,Nhan_Byte,Thoi_luong_giay,Trang_thai\n";
+      state.history.forEach((h) => {
+        const timeStr = new Date(h.closedAt).toLocaleTimeString();
+        csv += `"${timeStr}","${h.proto}","${h.internal}","${h.public}","${h.dest}",${h.out},${h.in},${h.duration},"${h.state}"\n`;
+      });
+      downloadFile("gateway-sessions-report.csv", "text/csv;charset=utf-8;", csv);
+      toast("Đã tải xuống file gateway-sessions-report.csv", true);
+      return;
+    }
+    if (a === "export_json") {
+      if (!state || !state.history || !state.history.length) {
+        toast("Chưa có dữ liệu lịch sử phiên để xuất", false);
+        return;
+      }
+      const json = JSON.stringify(state.history, null, 2);
+      downloadFile("gateway-sessions-report.json", "application/json;charset=utf-8;", json);
+      toast("Đã tải xuống file gateway-sessions-report.json", true);
+      return;
+    }
     if (a === "send") {
       const input = btn.parentElement.querySelector("input");
       const msg = input.value.trim();
@@ -498,6 +563,18 @@
     }
     if (map[a]) act(map[a], btn);
   });
+
+  function downloadFile(filename, type, text) {
+    const blob = new Blob([text], { type });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
 
   const addForm = $("#addRuleForm");
   if (addForm) {
@@ -791,6 +868,57 @@
   }
   $("#showFwd").addEventListener("change", () => state && renderLog(state));
 
+  function renderBanned(s) {
+    const box = $("#bannedBox");
+    const list = $("#bannedList");
+    const entries = Object.entries(s.banned || {});
+    if (!entries.length) {
+      if (box) box.hidden = true;
+      return;
+    }
+    if (box) box.hidden = false;
+    if (list) {
+      list.innerHTML = entries.map(([ip, info]) => {
+        return '<li style="display:flex; align-items:center; justify-content:space-between; background:#fff2f0; padding:4px 8px; border-radius:4px; border:1px solid #ffccc7;">'
+          + '<span><b>' + esc(ip) + '</b>: còn ' + esc(info) + '</span>'
+          + '<button class="btn small danger" data-act="unban_ip" data-ip="' + esc(ip) + '">Mở khóa</button></li>';
+      }).join("");
+    }
+  }
+
+  function renderQos(s) {
+    const h = host();
+    const lim = (s.qos && s.qos[h]) || 0;
+    const st = $("#qosStatus");
+    if (st) {
+      st.textContent = lim > 0 ? "Máy " + h + " đang bị giới hạn: " + lim + " KB/s" : "Máy " + h + ": Chưa giới hạn";
+      st.style.color = lim > 0 ? "var(--bad)" : "var(--muted)";
+    }
+  }
+
+  function renderHistory(s) {
+    const body = $("#histBody");
+    const noHist = $("#noHist");
+    if (!body) return;
+    const items = s.history || [];
+    if (!items.length) {
+      body.innerHTML = "";
+      if (noHist) noHist.hidden = false;
+      return;
+    }
+    if (noHist) noHist.hidden = true;
+    body.innerHTML = items.map((h) => {
+      const timeStr = new Date(h.closedAt).toLocaleTimeString();
+      return "<tr><td>" + esc(timeStr) + "</td><td><span class=\"proto\">" + esc(h.proto) + "</span></td>"
+        + "<td class=\"lan-addr\">" + esc(h.internal) + "</td>"
+        + "<td class=\"pub-addr\">" + esc(h.public) + "</td>"
+        + "<td>" + esc(h.dest) + "</td>"
+        + "<td>" + fmtBytes(h.out) + " / " + fmtBytes(h.in) + "</td>"
+        + "<td>" + h.duration + "s</td>"
+        + "<td><span class=\"badge s-off\">" + esc(h.state) + "</span></td></tr>";
+    }).join("");
+  }
+
   function render() {
     renderHeader(state);
     renderBoard(state);
@@ -798,8 +926,11 @@
     renderSessions(state);
     renderUdp(state);
     renderAlerts(state);
+    renderBanned(state);
     renderRules(state);
     renderBw(state);
+    renderQos(state);
+    renderHistory(state);
     renderStats(state);
     renderLog(state);
   }

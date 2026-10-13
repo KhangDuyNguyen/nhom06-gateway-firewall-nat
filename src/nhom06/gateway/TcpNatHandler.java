@@ -205,6 +205,7 @@ public class TcpNatHandler implements Runnable {
                     out.flush();
                     if (outbound) entry.addOut(n);
                     else entry.addIn(n);
+                    ctx.throttle(entry.internalIp, n);
                     Log.fwd(tag, (outbound ? "LAN->NET " : "NET->LAN ") + n + " byte  ["
                             + entry.internalSocket() + " <-> " + entry.publicSocket() + "]");
                 }

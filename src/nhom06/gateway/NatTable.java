@@ -45,6 +45,31 @@ public class NatTable {
         }
     }
 
+    /** Bản ghi tóm tắt một phiên đã kết thúc để lưu lịch sử và xuất báo cáo. */
+    public static class HistoryEntry {
+        public final String proto;
+        public final String internal;
+        public final String pub;
+        public final String dest;
+        public final long bytesOut;
+        public final long bytesIn;
+        public final long durationSec;
+        public final String state;
+        public final long closedAt;
+
+        public HistoryEntry(NatEntry e) {
+            this.proto = e.protocol.name();
+            this.internal = e.internalSocket();
+            this.pub = e.publicSocket();
+            this.dest = e.destSocket();
+            this.bytesOut = e.bytesOut();
+            this.bytesIn = e.bytesIn();
+            this.durationSec = Math.max(0, (System.currentTimeMillis() - e.createdAt) / 1000);
+            this.state = e.state().name();
+            this.closedAt = System.currentTimeMillis();
+        }
+    }
+
     private final ConcurrentHashMap<String, NatEntry> byKey = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<Integer, NatEntry> byPublicTcp = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<Integer, NatEntry> byPublicUdp = new ConcurrentHashMap<>();
@@ -63,6 +88,7 @@ public class NatTable {
     private final AtomicLong limitRejected = new AtomicLong();
     private final AtomicLong accumulatedBytesIn = new AtomicLong();
     private final AtomicLong accumulatedBytesOut = new AtomicLong();
+    private final java.util.concurrent.ConcurrentLinkedDeque<HistoryEntry> history = new java.util.concurrent.ConcurrentLinkedDeque<>();
     private volatile int peak = 0;
 
     public NatTable(String publicIp, int portMin, int portMax) {
@@ -195,11 +221,17 @@ public class NatTable {
         accumulatedBytesIn.addAndGet(entry.bytesIn());
         accumulatedBytesOut.addAndGet(entry.bytesOut());
         totalReleased.incrementAndGet();
+        history.addFirst(new HistoryEntry(entry));
+        while (history.size() > 50) history.removeLast();
         Log.nat("NAT-TABLE", String.format(
                 "THU HOI     %s %s -> %s  (gui %d B / nhan %d B, song %ds)",
                 entry.protocol, entry.internalSocket(), entry.publicSocket(),
                 entry.bytesOut(), entry.bytesIn(),
                 (System.currentTimeMillis() - entry.createdAt) / 1000));
+    }
+
+    public List<HistoryEntry> history() {
+        return new ArrayList<>(history);
     }
 
     public List<NatEntry> snapshot() {
