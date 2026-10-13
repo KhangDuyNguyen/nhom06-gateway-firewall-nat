@@ -48,17 +48,56 @@ public class Firewall {
     private final AtomicLong defaultInHits = new AtomicLong();
     private final AtomicLong defaultOutHits = new AtomicLong();
 
-    // --- Phát hiện quét cổng ---
+    // --- Phát hiện quét cổng & Auto-ban ---
     private final int scanThreshold;
     private final long scanWindowMs;
     private final ConcurrentHashMap<String, Map<Integer, Long>> deniedProbes = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, Long> lastAlert = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, Long> bannedIps = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, String> banReasons = new ConcurrentHashMap<>();
 
     public Firewall(String rulesFile, int scanThreshold, long scanWindowMs) {
         this.rulesFile = rulesFile;
         this.scanThreshold = scanThreshold;
         this.scanWindowMs = scanWindowMs;
         load();
+    }
+
+    public synchronized void ban(String ip, long durationMs, String reason) {
+        long until = System.currentTimeMillis() + durationMs;
+        bannedIps.put(ip, until);
+        banReasons.put(ip, reason);
+        Log.alert("SECURITY", "AUTO-BAN IP " + ip + " trong " + (durationMs / 1000) + "s. Ly do: " + reason);
+    }
+
+    public synchronized boolean unban(String ip) {
+        boolean removed = bannedIps.remove(ip) != null;
+        banReasons.remove(ip);
+        if (removed) Log.info("FIREWALL", "Da UNBAN cho IP: " + ip);
+        return removed;
+    }
+
+    public boolean isBanned(String ip) {
+        Long until = bannedIps.get(ip);
+        if (until == null) return false;
+        if (System.currentTimeMillis() > until) {
+            bannedIps.remove(ip);
+            banReasons.remove(ip);
+            Log.info("FIREWALL", "Da het han AUTO-BAN cho IP: " + ip);
+            return false;
+        }
+        return true;
+    }
+
+    public Map<String, String> bannedIpsSummary() {
+        long now = System.currentTimeMillis();
+        bannedIps.entrySet().removeIf(e -> now > e.getValue());
+        Map<String, String> res = new HashMap<>();
+        bannedIps.forEach((ip, until) -> {
+            long left = Math.max(0, (until - now) / 1000);
+            res.put(ip, left + "s (" + banReasons.getOrDefault(ip, "vi pham") + ")");
+        });
+        return res;
     }
 
     public final synchronized void load() {
@@ -98,6 +137,10 @@ public class Firewall {
 
     public Decision check(FirewallRule.Direction dir, Protocol proto,
                           String srcIp, int srcPort, String dstIp, int dstPort) {
+        if (isBanned(srcIp)) {
+            deniedCount.incrementAndGet();
+            return new Decision(false, "AUTO-BAN: IP " + srcIp + " dang bi tam khoa");
+        }
         for (FirewallRule r : rules) {
             if (r.matches(dir, proto, srcIp, srcPort, dstIp, dstPort)) {
                 r.hit();
@@ -136,6 +179,9 @@ public class Firewall {
                 Log.alert("SECURITY", String.format(
                         "Nghi van QUET CONG tu %s: %d cong bi tu choi trong %ds -> %s",
                         srcIp, ports.size(), scanWindowMs / 1000, new ArrayList<>(ports.keySet())));
+                if (!"127.0.0.1".equals(srcIp)) {
+                    ban(srcIp, 60000, "Quet " + ports.size() + " cong");
+                }
             }
         }
     }

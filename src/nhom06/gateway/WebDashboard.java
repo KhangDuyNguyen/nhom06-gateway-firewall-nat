@@ -259,7 +259,48 @@ public class WebDashboard {
                     .append(",\"text\":").append(q(u.text))
                     .append('}');
         }
-        b.append("]}}");
+        b.append("]}");
+
+        // --- lịch sử phiên đã kết thúc ---
+        b.append(",\"history\":[");
+        first = true;
+        for (NatTable.HistoryEntry h : nat.history()) {
+            if (!first) b.append(',');
+            first = false;
+            b.append("{\"proto\":").append(q(h.proto))
+                    .append(",\"internal\":").append(q(h.internal))
+                    .append(",\"public\":").append(q(h.pub))
+                    .append(",\"dest\":").append(q(h.dest))
+                    .append(",\"out\":").append(h.bytesOut)
+                    .append(",\"in\":").append(h.bytesIn)
+                    .append(",\"duration\":").append(h.durationSec)
+                    .append(",\"state\":").append(q(h.state))
+                    .append(",\"closedAt\":").append(h.closedAt)
+                    .append('}');
+        }
+        b.append(']');
+
+        // --- danh sách IP bị cấm (Auto-ban) ---
+        b.append(",\"banned\":{");
+        first = true;
+        for (Map.Entry<String, String> be : fw.bannedIpsSummary().entrySet()) {
+            if (!first) b.append(',');
+            first = false;
+            b.append(q(be.getKey())).append(':').append(q(be.getValue()));
+        }
+        b.append('}');
+
+        // --- cấu hình QoS ---
+        b.append(",\"qos\":{");
+        first = true;
+        for (Map.Entry<String, Integer> qe : ctx.qosLimitsKb().entrySet()) {
+            if (!first) b.append(',');
+            first = false;
+            b.append(q(qe.getKey())).append(':').append(qe.getValue());
+        }
+        b.append('}');
+
+        b.append('}');
         return b.toString();
     }
 
@@ -337,6 +378,25 @@ public class WebDashboard {
                 if (line <= 0) return new DemoClient.Result(false, "So dong khong hop le.");
                 boolean ok = ctx.firewall.removeRule(line);
                 return new DemoClient.Result(ok, ok ? "Da xoa luat #" + line : "Khong tim thay luat #" + line);
+            }
+            case "set_qos": {
+                String ip = p.getOrDefault("ip", "").trim();
+                int kb = intOf(p.get("limit"), 0);
+                if (ip.isEmpty()) return new DemoClient.Result(false, "IP khong hop le");
+                ctx.setQosLimit(ip, kb);
+                return new DemoClient.Result(true, kb > 0 ? "Da gioi han " + ip + " o muc " + kb + " KB/s" : "Da huy gioi han QoS cho " + ip);
+            }
+            case "ban_ip": {
+                String ip = p.getOrDefault("ip", "").trim();
+                int sec = Math.max(5, intOf(p.get("sec"), 60));
+                if (ip.isEmpty()) return new DemoClient.Result(false, "IP khong hop le");
+                ctx.firewall.ban(ip, sec * 1000L, "Khoa thu cong tu Web");
+                return new DemoClient.Result(true, "Da AUTO-BAN IP " + ip + " trong " + sec + " giay");
+            }
+            case "unban_ip": {
+                String ip = p.getOrDefault("ip", "").trim();
+                boolean ok = ctx.firewall.unban(ip);
+                return new DemoClient.Result(ok, ok ? "Da UNBAN cho IP: " + ip : "IP khong nam trong danh sach khoa");
             }
             case "verbose":
                 Log.setVerbose(!Log.isVerbose());
