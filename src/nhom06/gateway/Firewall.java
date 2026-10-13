@@ -141,6 +141,26 @@ public class Firewall {
     }
 
     public List<FirewallRule> rules()  { return new ArrayList<>(rules); }
+
+    /** Thêm một luật động lên đầu danh sách để ưu tiên áp dụng ngay lập tức. */
+    public synchronized boolean addRule(String ruleText) {
+        int nextLine = rules.stream().mapToInt(r -> r.lineNumber).max().orElse(0) + 1;
+        FirewallRule r = FirewallRule.parse(ruleText, nextLine);
+        if (r == null) return false;
+        rules.add(0, r);
+        Log.info("FIREWALL", "Da them luat #" + nextLine + ": " + r.raw);
+        return true;
+    }
+
+    /** Xóa một luật theo số dòng. */
+    public synchronized boolean removeRule(int lineNumber) {
+        boolean removed = rules.removeIf(r -> r.lineNumber == lineNumber);
+        if (removed) {
+            Log.info("FIREWALL", "Da xoa luat #" + lineNumber);
+        }
+        return removed;
+    }
+
     public FirewallRule.Action defaultIn()  { return defaultIn; }
     public FirewallRule.Action defaultOut() { return defaultOut; }
     public long defaultInHits()        { return defaultInHits.get(); }

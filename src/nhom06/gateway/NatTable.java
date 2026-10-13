@@ -61,6 +61,8 @@ public class NatTable {
     private final AtomicLong totalReleased = new AtomicLong();
     private final AtomicLong totalRejected = new AtomicLong();
     private final AtomicLong limitRejected = new AtomicLong();
+    private final AtomicLong accumulatedBytesIn = new AtomicLong();
+    private final AtomicLong accumulatedBytesOut = new AtomicLong();
     private volatile int peak = 0;
 
     public NatTable(String publicIp, int portMin, int portMax) {
@@ -190,6 +192,8 @@ public class NatTable {
         }
         if (entry.staticMapping) return;   // ánh xạ tĩnh không tính vào thống kê PAT
 
+        accumulatedBytesIn.addAndGet(entry.bytesIn());
+        accumulatedBytesOut.addAndGet(entry.bytesOut());
         totalReleased.incrementAndGet();
         Log.nat("NAT-TABLE", String.format(
                 "THU HOI     %s %s -> %s  (gui %d B / nhan %d B, song %ds)",
@@ -235,6 +239,20 @@ public class NatTable {
     public long totalRejected()    { return totalRejected.get(); }
     public long limitRejected()    { return limitRejected.get(); }
     public int peak()              { return peak; }
+
+    public long totalBytesIn() {
+        long sum = accumulatedBytesIn.get();
+        for (NatEntry e : byPublicTcp.values()) sum += e.bytesIn();
+        for (NatEntry e : byPublicUdp.values()) sum += e.bytesIn();
+        return sum;
+    }
+
+    public long totalBytesOut() {
+        long sum = accumulatedBytesOut.get();
+        for (NatEntry e : byPublicTcp.values()) sum += e.bytesOut();
+        for (NatEntry e : byPublicUdp.values()) sum += e.bytesOut();
+        return sum;
+    }
 
     /** Đổi kiểu NAT lúc đang chạy. Chỉ áp dụng cho các ánh xạ UDP tạo SAU thời điểm đổi. */
     public void setMode(NatMode m) {
