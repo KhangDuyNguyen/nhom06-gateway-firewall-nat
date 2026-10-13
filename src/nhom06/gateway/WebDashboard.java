@@ -162,6 +162,8 @@ public class WebDashboard {
                 .append(",\"fwAllowed\":").append(fw.allowedCount())
                 .append(",\"fwDenied\":").append(fw.deniedCount())
                 .append(",\"alerts\":").append(Log.alertTotal())
+                .append(",\"bytesIn\":").append(nat.totalBytesIn())
+                .append(",\"bytesOut\":").append(nat.totalBytesOut())
                 .append("}");
 
         // --- bảng NAT ---
@@ -324,6 +326,18 @@ public class WebDashboard {
             case "reload":
                 ctx.firewall.load();
                 return new DemoClient.Result(true, "Da nap lai " + ctx.firewall.rules().size() + " luat.");
+            case "add_rule": {
+                String rule = p.getOrDefault("rule", "").trim();
+                if (rule.isEmpty()) return new DemoClient.Result(false, "Noi dung luat trong.");
+                boolean ok = ctx.firewall.addRule(rule);
+                return new DemoClient.Result(ok, ok ? "Da them luat: " + rule : "Loi cu phap luat: " + rule);
+            }
+            case "delete_rule": {
+                int line = intOf(p.get("line"), -1);
+                if (line <= 0) return new DemoClient.Result(false, "So dong khong hop le.");
+                boolean ok = ctx.firewall.removeRule(line);
+                return new DemoClient.Result(ok, ok ? "Da xoa luat #" + line : "Khong tim thay luat #" + line);
+            }
             case "verbose":
                 Log.setVerbose(!Log.isVerbose());
                 return new DemoClient.Result(true, "Log chi tiet: " + (Log.isVerbose() ? "bat" : "tat"));
