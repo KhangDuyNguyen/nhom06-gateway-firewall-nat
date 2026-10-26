@@ -3,10 +3,8 @@ REM Bien dich toan bo ma nguon (duoc cac script khac goi, khong dung lai)
 cd /d "%~dp0.."
 if not exist out mkdir out
 if not exist logs mkdir logs
-dir /s /b src\*.java > sources.txt
-javac -encoding UTF-8 -d out @sources.txt
+powershell -NoProfile -ExecutionPolicy Bypass -Command "& javac -encoding UTF-8 -d out (Get-ChildItem -Path src -Filter *.java -Recurse).FullName; exit $LASTEXITCODE"
 set ERR=%errorlevel%
-del sources.txt
 if not "%ERR%"=="0" (
   echo.
   echo LOI BIEN DICH - xem thong bao phia tren.
